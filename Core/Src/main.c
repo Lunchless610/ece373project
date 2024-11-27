@@ -24,7 +24,11 @@
 
 /* Private includes ----------------------------------------------------------*/
 /* USER CODE BEGIN Includes */
-
+#include <stdio.h>
+#include <stdlib.h>
+#include <stdint.h>
+#include <string.h>
+#include <wave.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
@@ -83,6 +87,43 @@ void Sound(uint16_t frq)
     	DelayUS(1000);
 }
 
+// WAV文件的元数据结构
+typedef struct {
+    char chunkID[4];       // "RIFF"
+    uint32_t chunkSize;    // 文件大小
+    char format[4];        // "WAVE"
+    char subchunk1ID[4];   // "fmt "
+    uint32_t subchunk1Size;// 16 for PCM
+    uint16_t audioFormat;  // PCM = 1
+    uint16_t numChannels;  // 声道数量
+    uint32_t sampleRate;   // 采样�??
+    uint32_t byteRate;     // 每秒字节�??
+    uint16_t blockAlign;   // 每样本的字节�??
+    uint16_t bitsPerSample;// 每样本的位数
+    char subchunk2ID[4];   // "data"
+    uint32_t subchunk2Size;// 数据大小
+} WAVHeader;
+
+// 解析WAV文件�??
+void parseWAVHeader(const uint8_t *data, WAVHeader *header) {
+    memcpy(header->chunkID, data, 4);
+    header->chunkSize = *(uint32_t *)(data + 4);
+    memcpy(header->format, data + 8, 4);
+    memcpy(header->subchunk1ID, data + 12, 4);
+    header->subchunk1Size = *(uint32_t *)(data + 16);
+    header->audioFormat = *(uint16_t *)(data + 20);
+    header->numChannels = *(uint16_t *)(data + 22);
+    header->sampleRate = *(uint32_t *)(data + 24);
+    header->byteRate = *(uint32_t *)(data + 28);
+    header->blockAlign = *(uint16_t *)(data + 32);
+    header->bitsPerSample = *(uint16_t *)(data + 34);
+    memcpy(header->subchunk2ID, data + 36, 4);
+    header->subchunk2Size = *(uint32_t *)(data + 40);
+}
+
+
+
+
 /* USER CODE END 0 */
 
 /**
@@ -126,6 +167,8 @@ int main(void)
 
   HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 1);
 
+  WAVHeader wh;
+  parseWAVHeader(wav_data, &wh);
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -137,7 +180,9 @@ int main(void)
   while (1)
   {
     /* USER CODE END WHILE */
-	  for(i = 0; i < tone[j]/4 ; i ++){
+
+    /* USER CODE BEGIN 3 */
+    for(i = 0; i < tone[j]/4 ; i ++){
 		  Sound(tone[j]);
 	  }
 
@@ -146,7 +191,6 @@ int main(void)
 	  if(j > 12){
 		  j = 0;
 	  }
-    /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
 }
