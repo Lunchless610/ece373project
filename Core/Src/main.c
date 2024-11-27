@@ -55,10 +55,33 @@ uint8_t pressed_key = 0;
 void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 //void MX_GPIO_Init(void);
+uint32_t tone[] = {247,262,294,330,349,392,440,294,523,587,659,698,784,1000};
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
+void DelayUS(uint32_t Delay) {
+	  uint32_t delayReg;
+	  uint32_t usNum = (uint32_t)(Delay*16);
+
+	  delayReg = 0;
+	  while(delayReg!=usNum) delayReg++;
+}
+
+
+void Sound(uint16_t frq)
+{
+	uint32_t time;
+    if(frq != 1000)
+    {
+        time = 500000/((uint32_t)frq);
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 1);
+        DelayUS(time);
+        HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 0);
+        DelayUS(time);
+    }else
+    	DelayUS(1000);
+}
 
 /* USER CODE END 0 */
 
@@ -101,18 +124,28 @@ int main(void)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
 
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, 0);
+  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 1);
+
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
+  uint16_t i, j;
+
+  j = 3;
+
   while (1)
   {
     /* USER CODE END WHILE */
-	  HAL_GPIO_EXTI_Callback(GPIO_PIN_6);
-	  HAL_GPIO_EXTI_Callback(GPIO_PIN_7);
-	  HAL_GPIO_EXTI_Callback(GPIO_PIN_8);
-	  HAL_GPIO_EXTI_Callback(GPIO_PIN_9);
+	  for(i = 0; i < tone[j]/4 ; i ++){
+		  Sound(tone[j]);
+	  }
+
+	  j ++;
+
+	  if(j > 12){
+		  j = 0;
+	  }
     /* USER CODE BEGIN 3 */
   }
   /* USER CODE END 3 */
@@ -136,7 +169,7 @@ void SystemClock_Config(void)
   RCC_OscInitStruct.HSIState = RCC_HSI_ON;
   RCC_OscInitStruct.PLL.PLLState = RCC_PLL_ON;
   RCC_OscInitStruct.PLL.PLLSource = RCC_PLLSOURCE_HSE;
-  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL2;
+  RCC_OscInitStruct.PLL.PLLMUL = RCC_PLL_MUL9;
   if (HAL_RCC_OscConfig(&RCC_OscInitStruct) != HAL_OK)
   {
     Error_Handler();
@@ -148,10 +181,10 @@ void SystemClock_Config(void)
                               |RCC_CLOCKTYPE_PCLK1|RCC_CLOCKTYPE_PCLK2;
   RCC_ClkInitStruct.SYSCLKSource = RCC_SYSCLKSOURCE_PLLCLK;
   RCC_ClkInitStruct.AHBCLKDivider = RCC_SYSCLK_DIV1;
-  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV1;
+  RCC_ClkInitStruct.APB1CLKDivider = RCC_HCLK_DIV2;
   RCC_ClkInitStruct.APB2CLKDivider = RCC_HCLK_DIV1;
 
-  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_0) != HAL_OK)
+  if (HAL_RCC_ClockConfig(&RCC_ClkInitStruct, FLASH_LATENCY_2) != HAL_OK)
   {
     Error_Handler();
   }
