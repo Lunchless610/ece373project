@@ -96,15 +96,15 @@ typedef struct {
     uint32_t subchunk1Size;// 16 for PCM
     uint16_t audioFormat;  // PCM = 1
     uint16_t numChannels;  // 声道数量
-    uint32_t sampleRate;   // 采样�??
-    uint32_t byteRate;     // 每秒字节�??
-    uint16_t blockAlign;   // 每样本的字节�??
+    uint32_t sampleRate;   // 采样�???
+    uint32_t byteRate;     // 每秒字节�???
+    uint16_t blockAlign;   // 每样本的字节�???
     uint16_t bitsPerSample;// 每样本的位数
     char subchunk2ID[4];   // "data"
     uint32_t subchunk2Size;// 数据大小
 } WAVHeader;
 
-// 解析WAV文件�??
+// 解析WAV文件�???
 void parseWAVHeader(const uint8_t *data, WAVHeader *header) {
     memcpy(header->chunkID, data, 4);
     header->chunkSize = *(uint32_t *)(data + 4);
@@ -176,21 +176,39 @@ int main(void)
   uint16_t i, j;
 
   j = 3;
-
+  uint16_t addr = 44;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-    for(i = 0; i < tone[j]/4 ; i ++){
-		  Sound(tone[j]);
-	  }
+//    for(i = 0; i < tone[j]/4 ; i ++){
+//		  Sound(tone[j]);
+//	  }
+//
+//	  j ++;
+//
+//	  if(j > 12){
+//		  j = 0;
+//	  }
+	if (wh.numChannels == 2){
+		uint16_t chk = *(uint16_t *)(wav_data + addr);
+		uint8_t left = *(uint8_t *) &chk;
+		uint8_t right = *(uint8_t *) (&chk+2);
+		uint8_t out = left / 2 + right / 2;
 
-	  j ++;
-
-	  if(j > 12){
-		  j = 0;
-	  }
+		uint16_t pins[] = {GPIO_PIN_1, GPIO_PIN_2, GPIO_PIN_10, GPIO_PIN_11, GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14, GPIO_PIN_15};
+		for (int i = 0; i < 8; i++) {
+			// 使用位运算提取每�?4位的�?
+			uint8_t bit_value = (out >> (7 - i)) & 1;
+			HAL_GPIO_WritePin(GPIOB, pins[i], bit_value);
+		}
+	}
+	addr += 2;
+	if (addr > 460){
+		addr = 44;
+	}
+	DelayUS(1000000 / wh.sampleRate);
   }
   /* USER CODE END 3 */
 }
@@ -269,8 +287,8 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     else if(GPIO_Pin == GPIO_PIN_9 && HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9))
     {
       pressed_key = 51; //ASCII value of 3
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
     }
 
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
@@ -283,19 +301,19 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     else if(GPIO_Pin == GPIO_PIN_7 && HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7))
     {
       pressed_key = 56; //ASCII value of 8
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 0);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, 1);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 0);
+      // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, 1);
     }
     else if(GPIO_Pin == GPIO_PIN_8 && HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8))
     {
       pressed_key = 53; //ASCII value of 5
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
     }
     else if(GPIO_Pin == GPIO_PIN_9 && HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9))
     {
       pressed_key = 50; //ASCII value of 2
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
     }
 
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
@@ -308,27 +326,27 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     else if(GPIO_Pin == GPIO_PIN_7 && HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_7))
     {
       pressed_key = 55; //ASCII value of 7
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
     }
     else if(GPIO_Pin == GPIO_PIN_8 && HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_8))
     {
       pressed_key = 52; //ASCII value of 4
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, 0);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, 0);
     }
     else if(GPIO_Pin == GPIO_PIN_9 && HAL_GPIO_ReadPin(GPIOB, GPIO_PIN_9))
     {
       pressed_key = 49; //ASCII value of 1
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
-      HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 0);
-      HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, 1);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
+      // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 0);
+      // HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, 1);
     }
 
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 1);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
 
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
+    // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
+    // HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
 
     HAL_GPIO_WritePin(GPIOA, GPIO_PIN_2, 0);
     /*Configure GPIO pins : PB6 PB7 PB8 PB9 back to EXTI*/
