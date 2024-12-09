@@ -44,9 +44,9 @@ typedef struct {
     uint32_t subchunk1Size;// 16 for PCM
     uint16_t audioFormat;  // PCM = 1
     uint16_t numChannels;  // 声道数量
-    uint32_t sampleRate;   // 采样�?????
-    uint32_t byteRate;     // 每秒字节�?????
-    uint16_t blockAlign;   // 每样本的字节�?????
+    uint32_t sampleRate;   // 采样�???????
+    uint32_t byteRate;     // 每秒字节�???????
+    uint16_t blockAlign;   // 每样本的字节�???????
     uint16_t bitsPerSample;// 每样本的位数
     char subchunk2ID[4];   // "data"
     uint32_t subchunk2Size;// 数据大小
@@ -55,17 +55,18 @@ typedef struct {
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-// SD卡命�?
+// SD卡命�???
 #define CMD0    (0x40+0)  // GO_IDLE_STATE
 #define CMD8    (0x40+8)  // SEND_IF_COND
 #define CMD17   (0x40+17) // READ_SINGLE_BLOCK
 #define CMD55   (0x40+55) // APP_CMD
 #define ACMD41  (0x40+41) // SD_SEND_OP_COND
+#define CMD58  58
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-// SD卡响�?
+// SD卡响�???
 #define R1_IDLE_STATE           (1 << 0)
 /* USER CODE END PM */
 
@@ -77,7 +78,7 @@ uint32_t previousMillis = 0;
 uint32_t currentMillis = 0;
 uint8_t pressed_key = 0;
 
-extern SPI_HandleTypeDef hspi1; // CubeMX生成的SPI句柄，根据你的配置修�?
+extern SPI_HandleTypeDef hspi1; // CubeMX生成的SPI句柄，根据你的配置修�???
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -112,7 +113,7 @@ void Sound(uint16_t frq)
     	DelayUS(1000);
 }
 
-// 解析WAV文件�?????
+// 解析WAV文件�???????
 void parseWAVHeader(const uint8_t *data, WAVHeader *header) {
     memcpy(header->chunkID, data, 4);
     header->chunkSize = *(uint32_t *)(data + 4);
@@ -129,7 +130,20 @@ void parseWAVHeader(const uint8_t *data, WAVHeader *header) {
     header->subchunk2Size = *(uint32_t *)(data + 40);
 }
 
-// 发�?�SD卡命�?
+uint8_t CRC7(const uint8_t *data, uint8_t len) {
+  uint8_t crc = 0;
+  for (uint8_t i = 0; i < len; i++) {
+    crc = (crc << 1) | (data[i] >> 7);
+    if (crc & 0x80) crc ^= 0x09;
+    for (uint8_t j = 1; j < 8; j++) {
+      crc = (crc << 1) | (data[i] >> (7 - j) & 1);
+      if (crc & 0x80) crc ^= 0x09;
+    }
+  }
+  return crc;
+}
+
+// 发�?�SD卡命�???
 uint8_t SD_SendCommand(uint8_t cmd, uint32_t arg)
 {
   uint8_t response;
@@ -140,14 +154,21 @@ uint8_t SD_SendCommand(uint8_t cmd, uint32_t arg)
   command[2] = (uint8_t)(arg >> 16);
   command[3] = (uint8_t)(arg >> 8);
   command[4] = (uint8_t)(arg);
-  command[5] = 0x95; // CRC (CMD0不需要CRC)
+//  command[5] = 0x95; // CRC (CMD0不需要CRC)
+
+
+  if (cmd != CMD0) {
+      uint8_t crc_data[5] = {cmd, (uint8_t)(arg >> 24), (uint8_t)(arg >> 16), (uint8_t)(arg >> 8), (uint8_t)arg};
+      command[5] = CRC7(crc_data, 5) | 0x01; // CRC7 + end bit
+    } else {
+      command[5] = 0x95; // CMD0的CRC
+    }
 
   HAL_SPI_TransmitReceive(&hspi1, command, &response, 1, HAL_MAX_DELAY);
-
   return response;
 }
 
-// 等待R1响应�?0xFF (SD卡忙) 或非0xFF (SD卡准备好)
+// 等待R1响应�???0xFF (SD卡忙) 或非0xFF (SD卡准备好)
 uint8_t SD_WaitReady(void)
 {
     uint8_t res;
@@ -156,53 +177,82 @@ uint8_t SD_WaitReady(void)
     do {
       res = SD_SendCommand(CMD0, 0);
       timeout--;
-    } while ((res != 0xFF) && timeout > 0 );
+    } while ((res != 0x01) && timeout > 0 );
 
     return res;
 }
 
-// 初始化SD�?
+// 初始化SD�???
 uint8_t SD_Initialize(void)
 {
-    uint8_t response;
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 0);
+	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 1);
+
     uint16_t timeout = 1000; // 超时时间
-
-    // CS pin high (SD卡未选中)
-    HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET); // 根据你的CS引脚修改
-
-    // 发�?�至�?74个时�?
     uint8_t dummy = 0xFF;
+
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
+	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 0);
+    // 发�?�至�???74个时�???
     for (int i = 0; i < 10; i++)
         HAL_SPI_Transmit(&hspi1, &dummy, 1, HAL_MAX_DELAY);
 
-    // CS pin low (SD卡�?�中)
-    HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_RESET);
-
-    // 发�?�CMD0进入IDLE状�??
-    while ((response = SD_SendCommand(CMD0, 0)) != 0x01 && timeout > 0) {
+    HAL_Delay(1);
+    HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_RESET); // 根据你的CS引脚修改
+    uint8_t response = SD_SendCommand(CMD0, 0);//HAL_SPI_Receive(&hspi1, &response, 1, HAL_MAX_DELAY); // 发�?? CMD0
+    // 发�?�CMD0进入IDLE状�??
+    while (response != 0x01 && timeout > 0) {
+        HAL_SPI_TransmitReceive(&hspi1, &dummy, &response, 1, HAL_MAX_DELAY);
         timeout--;
+        if (response != 0xFF){
+        	{
+				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
+				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
+			}
+        }
     }
-    if (timeout == 0) return 1; // 初始化失�?
+    if (timeout == 0) {
+    	return 1; // 初始化失�???
+    }
 
 
-    // 发�?�CMD8, �?查SD卡版�?
+    // 发�?�CMD8, �???查SD卡版�???
     response = SD_SendCommand(CMD8, 0x000001AA);
     if (response != 0x01) return 1; // 初始化失败，不支持CMD8
 
-    // 发�?�ACMD41，初始化SD�?
+    // 发�?�ACMD41，初始化SD�???
     do {
         response = SD_SendCommand(CMD55, 0);
-        response = SD_SendCommand(ACMD41, 0x40000000);  // 支持高容量SD�?
+        response = SD_SendCommand(ACMD41, 0x40000000);  // 支持高容量SD�???
         timeout--;
     } while ((response & R1_IDLE_STATE) && timeout > 0);
 
-    if (timeout == 0) return 1; // 初始化失�?
+    if (timeout == 0) return 1; // 初始化失�???
+
+    // 发�?�CMD58读取OCR
+	response = SD_SendCommand(CMD58, 0);
+	if (response != 0x00) return 1; // 初始化失�??
+
+	uint8_t ocr[4];
+	HAL_SPI_Receive(&hspi1, ocr, 4, HAL_MAX_DELAY);
+
+	// �??查OCR寄存�??
+	if (!(ocr[0] & 0x80)) return 1; // 电源未准备好
+
+	// �??查CCS�?? (Card Capacity Status), 判断SD卡类�??
+	if (ocr[0] & 0x40) {
+	  // SDHC/SDXC �??
+	  // ...
+	} else {
+	  // SDSC �??
+	  // ...
+	}
 
 
     // CS pin high (SD卡未选中)
     HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
 
-    return 0; // 初始化成�?
+    return 0; // 初始化成�???
 }
 /* USER CODE END 0 */
 
@@ -244,15 +294,33 @@ int main(void)
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 1);
   HAL_GPIO_WritePin(GPIOB, GPIO_PIN_5, 1);
 
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
-  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
+//  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
+//  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
 
-  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 1);
+  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
 
   WAVHeader wh;
   parseWAVHeader(wav_data, &wh);
 
   SD_Initialize();
+  FATFS FatFs;  // FATFS文件系统对象
+  FRESULT res;  // 操作结果
+
+  // 挂载文件系统
+  res = f_mount(&FatFs, "/", 0);
+  if (res != FR_OK) {
+    // 挂载失败，处理错�??
+    Error_Handler();
+  }
+
+  FIL MyFile;  // 文件对象
+
+  // 打开文件
+  res = f_open(&MyFile, "single-piano-note-a2_100bpm_C_major.wav", FA_READ);
+  if (res != FR_OK) {
+    // 打开文件失败，处理错�??
+    Error_Handler();
+  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
@@ -283,7 +351,7 @@ int main(void)
 
 		uint16_t pins[] = {GPIO_PIN_1, GPIO_PIN_2, GPIO_PIN_10, GPIO_PIN_11, GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14, GPIO_PIN_15};
 		for (int i = 0; i < 8; i++) {
-			// 使用位运算提取每�???4位的�???
+			// 使用位运算提取每�?????4位的�?????
 			uint8_t bit_value = (out >> (7 - i)) & 1;
 			HAL_GPIO_WritePin(GPIOB, pins[i], bit_value);
 		}
@@ -453,6 +521,8 @@ void Error_Handler(void)
   __disable_irq();
   while (1)
   {
+	  HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 0);
+	  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
   }
   /* USER CODE END Error_Handler_Debug */
 }
