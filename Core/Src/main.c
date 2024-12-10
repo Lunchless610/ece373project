@@ -143,6 +143,35 @@ uint8_t CRC7(const uint8_t *data, uint8_t len) {
   return crc;
 }
 
+// 等待R1响应�???0xFF (SD卡忙) 或非0xFF (SD卡准备好)
+uint8_t SD_WaitReady(void)
+{
+    uint8_t res;
+    uint32_t timeout = 500; // 超时时间
+    uint8_t dummy = 0xFF;
+
+    do {
+    	HAL_SPI_TransmitReceive(&hspi1, &dummy, &res, 1, HAL_MAX_DELAY);
+      timeout--;
+    } while ((res != 0xFF) && timeout > 0 );
+
+    return res;
+}
+
+uint8_t SD_WaitResponse(void)
+{
+    uint8_t res;
+    uint32_t timeout = 500; // 超时时间
+    uint8_t dummy = 0xFF;
+
+    do {
+    	HAL_SPI_TransmitReceive(&hspi1, &dummy, &res, 1, HAL_MAX_DELAY);
+      timeout--;
+    } while ((res == 0xFF) && timeout > 0 );
+
+    return res;
+}
+
 // 发�?�SD卡命�???
 uint8_t SD_SendCommand(uint8_t cmd, uint32_t arg)
 {
@@ -164,56 +193,72 @@ uint8_t SD_SendCommand(uint8_t cmd, uint32_t arg)
       command[5] = 0x95; // CMD0的CRC
     }
 
+  response = SD_WaitReady();
   HAL_SPI_TransmitReceive(&hspi1, command, &response, 1, HAL_MAX_DELAY);
+  HAL_SPI_TransmitReceive(&hspi1, command+1, &response, 1, HAL_MAX_DELAY);
+  HAL_SPI_TransmitReceive(&hspi1, command+2, &response, 1, HAL_MAX_DELAY);
+  HAL_SPI_TransmitReceive(&hspi1, command+3, &response, 1, HAL_MAX_DELAY);
+  HAL_SPI_TransmitReceive(&hspi1, command+4, &response, 1, HAL_MAX_DELAY);
+  HAL_SPI_TransmitReceive(&hspi1, command+5, &response, 1, HAL_MAX_DELAY);
+  response = SD_WaitResponse();
   return response;
-}
-
-// 等待R1响应�???0xFF (SD卡忙) 或非0xFF (SD卡准备好)
-uint8_t SD_WaitReady(void)
-{
-    uint8_t res;
-    uint32_t timeout = 500; // 超时时间
-
-    do {
-      res = SD_SendCommand(CMD0, 0);
-      timeout--;
-    } while ((res != 0x01) && timeout > 0 );
-
-    return res;
 }
 
 // 初始化SD�???
 uint8_t SD_Initialize(void)
 {
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 0);
+	HAL_Delay(1000);
 	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 1);
+	HAL_Delay(1000);
 
     uint16_t timeout = 1000; // 超时时间
+    uint8_t empty = 0x00;
     uint8_t dummy = 0xFF;
+    uint8_t cmd0 = 0x40;
+    uint8_t crc = 0x95;
 
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
 	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 0);
     // 发�?�至�???74个时�???
-    for (int i = 0; i < 10; i++)
+    for (int i = 0; i < 100; i++)
         HAL_SPI_Transmit(&hspi1, &dummy, 1, HAL_MAX_DELAY);
 
-    HAL_Delay(1);
+    HAL_Delay(1000);
     HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_RESET); // 根据你的CS引脚修改
-    uint8_t response = SD_SendCommand(CMD0, 0);//HAL_SPI_Receive(&hspi1, &response, 1, HAL_MAX_DELAY); // 发�?? CMD0
+    HAL_Delay(1000);
+    //uint8_t response = SD_SendCommand(CMD0, 0);//HAL_SPI_Receive(&hspi1, &response, 1, HAL_MAX_DELAY); // 发�?? CMD0
+//    uint8_t response = SD_WaitReady();
+////	HAL_SPI_TransmitReceive(&hspi1, &dummy, &response, 1, HAL_MAX_DELAY);
+////	HAL_SPI_TransmitReceive(&hspi1, &dummy, &response, 1, HAL_MAX_DELAY)
+//
+//	HAL_SPI_TransmitReceive(&hspi1, &cmd0, &response, 1, HAL_MAX_DELAY);
+//    HAL_SPI_TransmitReceive(&hspi1, &empty, &response, 1, HAL_MAX_DELAY);
+//    HAL_SPI_TransmitReceive(&hspi1, &empty, &response, 1, HAL_MAX_DELAY);
+//    HAL_SPI_TransmitReceive(&hspi1, &empty, &response, 1, HAL_MAX_DELAY);
+//    HAL_SPI_TransmitReceive(&hspi1, &empty, &response, 1, HAL_MAX_DELAY);
+//    HAL_SPI_TransmitReceive(&hspi1, &crc, &response, 1, HAL_MAX_DELAY);
+//    HAL_SPI_TransmitReceive(&hspi1, &dummy, &response, 1, HAL_MAX_DELAY);
+
+    uint8_t response = SD_SendCommand(CMD0, 0);
     // 发�?�CMD0进入IDLE状�??
-    while (response != 0x01 && timeout > 0) {
-        HAL_SPI_TransmitReceive(&hspi1, &dummy, &response, 1, HAL_MAX_DELAY);
-        timeout--;
-        if (response != 0xFF){
-        	{
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
-			}
-        }
-    }
-    if (timeout == 0) {
-    	return 1; // 初始化失�???
-    }
+//    while (response != 0x01 && timeout > 0) {
+//        HAL_SPI_TransmitReceive(&hspi1, &dummy, &response, 1, HAL_MAX_DELAY);
+//        timeout--;
+//        if (response != 0xFF){
+//        	{
+//				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
+//				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
+//			}
+//        }
+//    }
+//    if (timeout == 0) {
+//    	return 1; // 初始化失�???
+//    }
+    response = SD_WaitResponse();
+	if (response != 0x01) {
+		return 1; // 初始化失�???
+	}
 
 
     // 发�?�CMD8, �???查SD卡版�???
