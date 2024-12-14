@@ -78,6 +78,7 @@ uint32_t previousMillis = 0;
 uint32_t currentMillis = 0;
 uint16_t pressed_key = 0x0000;
 
+
 extern SPI_HandleTypeDef hspi1; // CubeMX生成的SPI句柄，根据你的配置修�????????
 /* USER CODE END PV */
 
@@ -86,7 +87,9 @@ void SystemClock_Config(void);
 /* USER CODE BEGIN PFP */
 //void MX_GPIO_Init(void);
 uint32_t tone[] = { 262, 277, 294, 311, 330, 349, 370, 392, 415, 440, 466, 494};
-uint32_t waves[]= {0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0, 0};
+uint32_t waves[]= {1908, 1805, 1701, 1608, 1515, 1433, 1351, 1276, 1205, 1136, 1073, 1012};
+//412 450 928 905 456
+
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
@@ -136,62 +139,40 @@ void Sound(uint16_t frq)
     	DelayUS(1000);
 }
 
-void Waving(){
-	uint16_t pin;
+uint8_t Waving(){
+//	uint16_t pin;
+	uint16_t result = 0;
 	  for(int i = 0; i < 12; i++){
 		  if((pressed_key >> i) & 1 == 1){
-			  switch(i){
-			  	  case 0:
-			  		  pin = GPIO_PIN_3;
-			  		  break;
-			  	case 1:
-			  				  		  pin = GPIO_PIN_3;
-			  				  		  break;
-			  	case 2:
-			  				  		  pin = GPIO_PIN_4;
-			  				  		  break;
-			  	case 3:
-			  				  		  pin = GPIO_PIN_10;
-			  				  		  break;
-			  	case 4:
-			  				  		  pin = GPIO_PIN_11;
-			  				  		  break;
-			  	case 5:
-			  				  		  pin = GPIO_PIN_12;
-			  				  		  break;
-			  	case 6:
-			  				  		  pin = GPIO_PIN_13;
-			  				  		  break;
-			  	case 7:
-			  				  		  pin = GPIO_PIN_14;
-			  				  		  break;
-			  	case 8:
-			  				  		  pin = GPIO_PIN_15;
-			  				  		  break;
-			  	case 9:
-			  				  		  pin = GPIO_PIN_16;
-			  				  		  break;
-			  	case 10:
-			  				  		  pin = GPIO_PIN_17;
-			  				  		  break;
-			  	case 11:
-			  				  		  pin = GPIO_PIN_18;
-			  				  		  break;
-
+			  if(((uint32_t)((SysTick->VAL)/waves[i]))%2==0){
+				  result += 0x20;
 			  }
-			  if(((720000000-(SysTick->VAL))/waves[i])%2==0){
-				  HAL_GPIO_WritePin(GPIOB, pin, 1);
-			  }else{
-				  HAL_GPIO_WritePin(GPIOB, pin, 0);
+			  if(((uint32_t)((SysTick->VAL)/((uint32_t)(waves[i]/2))))%2==0){
+				  result += 0x08;
+			  }
+			  if(((uint32_t)((SysTick->VAL)/((uint32_t)(waves[i]/3))))%2==0){
+			  	  result += 0x08;
+			  }
+			  if(((uint32_t)((SysTick->VAL)/((uint32_t)(waves[i]/4))))%2==0){
+			  	  result += 0x08;
+			  			  }
+			  if(((uint32_t)((SysTick->VAL)/((uint32_t)(waves[i]/5))))%2==0){
+			  	  result += 0x04;
 			  }
 		  }
+	  }
+	  return result;
+}
 
-	  }
-	  if(SysTick->CTRL & 0x00010000){
-		  SysTick->LOAD = 720000000;   // 设置定时器重装�??
-		  SysTick->VAL = 0x00;        // 清空当前计数�????????????
-		  SysTick->CTRL = 0x00000005; // 设置时钟源为HCLK，启动定时器
-	  }
+void Sounding(uint8_t waving){
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, (waving >> 7) & 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, (waving >> 6) & 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, (waving >> 5) & 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, (waving >> 4) & 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, (waving >> 3) & 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, (waving >> 2) & 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, (waving >> 1) & 1);
+    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, waving & 1);
 }
 
 // 解析WAV文件�????????????
@@ -416,7 +397,7 @@ int main(void)
   SysTick->VAL = 0x00;        // 清空当前计数�????????????
   SysTick->CTRL = 0x00000005; // 设置时钟源为HCLK，启动定时器
   for(int i = 0; i < 12; i++){
-	  waves[i] = 500000/tone[i];
+	  waves[i] = 72*500000/tone[i];
   }
   uint16_t j;
 
@@ -439,14 +420,27 @@ int main(void)
 //	  if(j > 12){
 //		  j = 0;
 //	  }
-	  HAL_GPIO_EXTI_Callback(Row_4_In_Pin);
-	  HAL_GPIO_EXTI_Callback(Row_3_In_Pin);
-	  HAL_GPIO_EXTI_Callback(Row_2_In_Pin);
- 	  HAL_GPIO_EXTI_Callback(Row_1_In_Pin);
+	  if(SysTick->CTRL & 0x00010000){
+		  SysTick->LOAD = 720000000;   // 设置定时器重装�??
+		  SysTick->VAL = 0x00;        // 清空当前计数�????????????
+		  SysTick->CTRL = 0x00000005; // 设置时钟源为HCLK，启动定时器
+	  }
+
+	  currentMillis = SysTick->VAL;
+	  if ((previousMillis > currentMillis + 72000) || (previousMillis < currentMillis)){
+		 HAL_GPIO_EXTI_Callback(Row_4_In_Pin);
+		 HAL_GPIO_EXTI_Callback(Row_3_In_Pin);
+		 HAL_GPIO_EXTI_Callback(Row_2_In_Pin);
+	 	 HAL_GPIO_EXTI_Callback(Row_1_In_Pin);
+	 	 previousMillis = currentMillis;
+	  }
+
+
 
 //	  for(int i = 0; i < 12; i++){
 //		  if((pressed_key >> i) & 1 == 1){
 //			  freq = tone[i];
+//	  	  	  break;
 //		  }else if(i == 11){
 //			  freq = 1000;
 //		  }
@@ -456,7 +450,7 @@ int main(void)
 //
 //
 //	  Sound(freq);
- 	  Waving();
+ 	  Sounding(Waving());
 
 //	  i = HAL_GPIO_ReadPin(GPIOB, Row_4_In_Pin);
 
