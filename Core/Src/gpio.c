@@ -44,14 +44,6 @@ void MX_GPIO_Init(void)
 
   GPIO_InitTypeDef GPIO_InitStruct = {0};
 
-//  RCC_APB2PeriphClockCmd(RCC_APB2Periph_AFIO, ENABLE);  //AFIO时钟
-//
-//  GPIO_PinRemapConfig(GPIO_Remap_SWJ_Disable, ENABLE);
-//  // 改变指定管脚的映射 GPIO_Remap_SWJ_Disable SWJ 完全禁用（JTAG+SW-DP）
-//  GPIO_PinRemapConfig(GPIO_Remap_SWJ_JTAGDisable , ENABLE);
-//  // 改变指定管脚的映射 GPIO_Remap_SWJ_JTAGDisable ，JTAG-DP 禁用 + SW-DP 使能
-
-
   /* GPIO Ports Clock Enable */
   __HAL_RCC_GPIOC_CLK_ENABLE();
   __HAL_RCC_GPIOD_CLK_ENABLE();
@@ -64,7 +56,7 @@ void MX_GPIO_Init(void)
   /*Configure GPIO pin Output Level */
   HAL_GPIO_WritePin(GPIOB, Col_3_Out_Pin|Col_2_Out_Pin|Col_1_Out_Pin|GPIO_PIN_10
                           |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
-                          |GPIO_PIN_15|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9, GPIO_PIN_RESET);
+                          |GPIO_PIN_15|GPIO_PIN_3|GPIO_PIN_4, GPIO_PIN_RESET);
 
   /*Configure GPIO pins : PA1 PAPin */
   GPIO_InitStruct.Pin = GPIO_PIN_1|SD_CS_Pin;
@@ -75,10 +67,10 @@ void MX_GPIO_Init(void)
 
   /*Configure GPIO pins : PBPin PBPin PBPin PB10
                            PB11 PB12 PB13 PB14
-                           PB15 PB7 PB8 PB9 */
+                           PB15 PB3 PB4 */
   GPIO_InitStruct.Pin = Col_3_Out_Pin|Col_2_Out_Pin|Col_1_Out_Pin|GPIO_PIN_10
                           |GPIO_PIN_11|GPIO_PIN_12|GPIO_PIN_13|GPIO_PIN_14
-                          |GPIO_PIN_15|GPIO_PIN_7|GPIO_PIN_8|GPIO_PIN_9;
+                          |GPIO_PIN_15|GPIO_PIN_3|GPIO_PIN_4;
   GPIO_InitStruct.Mode = GPIO_MODE_OUTPUT_PP;
   GPIO_InitStruct.Pull = GPIO_NOPULL;
   GPIO_InitStruct.Speed = GPIO_SPEED_FREQ_LOW;
