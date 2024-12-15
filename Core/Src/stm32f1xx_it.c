@@ -187,7 +187,9 @@ void SysTick_Handler(void)
   /* USER CODE END SysTick_IRQn 0 */
   HAL_IncTick();
   /* USER CODE BEGIN SysTick_IRQn 1 */
-
+  extern uint32_t us;
+  us++;
+  if (us == 10000000) us = 0;
   /* USER CODE END SysTick_IRQn 1 */
 }
 

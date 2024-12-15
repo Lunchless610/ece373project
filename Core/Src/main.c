@@ -30,43 +30,23 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <string.h>
+#include <math.h>
 #include <wave.h>
 /* USER CODE END Includes */
 
 /* Private typedef -----------------------------------------------------------*/
 /* USER CODE BEGIN PTD */
-// WAV文件的元数据结构
-typedef struct {
-    char chunkID[4];       // "RIFF"
-    uint32_t chunkSize;    // 文件大小
-    char format[4];        // "WAVE"
-    char subchunk1ID[4];   // "fmt "
-    uint32_t subchunk1Size;// 16 for PCM
-    uint16_t audioFormat;  // PCM = 1
-    uint16_t numChannels;  // 声道数量
-    uint32_t sampleRate;   // 采样�????????????
-    uint32_t byteRate;     // 每秒字节�????????????
-    uint16_t blockAlign;   // 每样本的字节�????????????
-    uint16_t bitsPerSample;// 每样本的位数
-    char subchunk2ID[4];   // "data"
-    uint32_t subchunk2Size;// 数据大小
-} WAVHeader;
+
 /* USER CODE END PTD */
 
 /* Private define ------------------------------------------------------------*/
 /* USER CODE BEGIN PD */
-// SD卡命�????????
-#define CMD0    (0x40+0)  // GO_IDLE_STATE
-#define CMD8    (0x40+8)  // SEND_IF_COND
-#define CMD17   (0x40+17) // READ_SINGLE_BLOCK
-#define CMD55   (0x40+55) // APP_CMD
-#define ACMD41  (0x40+41) // SD_SEND_OP_COND
-#define CMD58  58
+
 /* USER CODE END PD */
 
 /* Private macro -------------------------------------------------------------*/
 /* USER CODE BEGIN PM */
-// SD卡响�????????
+// SD卡响�?????????
 #define R1_IDLE_STATE           (1 << 0)
 /* USER CODE END PM */
 
@@ -79,7 +59,7 @@ uint32_t currentMillis = 0;
 uint16_t pressed_key = 0x0000;
 
 
-extern SPI_HandleTypeDef hspi1; // CubeMX生成的SPI句柄，根据你的配置修�????????
+extern SPI_HandleTypeDef hspi1; // CubeMX生成的SPI句柄，根据你的配置修�?????????
 /* USER CODE END PV */
 
 /* Private function prototypes -----------------------------------------------*/
@@ -88,77 +68,79 @@ void SystemClock_Config(void);
 //void MX_GPIO_Init(void);
 uint32_t tone[] = { 262, 277, 294, 311, 330, 349, 370, 392, 415, 440, 466, 494};
 uint32_t waves[]= {1908, 1805, 1701, 1608, 1515, 1433, 1351, 1276, 1205, 1136, 1073, 1012};
-//412 450 928 905 456
+uint32_t us = 0;
 
 /* USER CODE END PFP */
 
 /* Private user code ---------------------------------------------------------*/
 /* USER CODE BEGIN 0 */
-void DelayUS(uint32_t Delay) {
-//	  uint32_t delayReg;
-//	  uint32_t usNum = (uint32_t)(Delay*16);
-//
-//	  delayReg = 0;
-//	  while(delayReg!=usNum) delayReg++;
-	  SysTick->LOAD = 72 * Delay;   // 设置定时器重装�??
-	  SysTick->VAL = 0x00;        // 清空当前计数�????????????
-	  SysTick->CTRL = 0x00000005; // 设置时钟源为HCLK，启动定时器
-	  while (!(SysTick->CTRL & 0x00010000))
-	    ;                         // 等待计数�????????????0
-	  SysTick->CTRL = 0x00000004; // 关闭定时�????????????
+
+uint32_t e_time[12] = {0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF, 0xFFFFFFFF};
+uint32_t s_time[12] = {0,0,0,0,0,0,0,0,0,0,0,0};
+uint8_t finished = 0xFF;
+
+uint8_t ADSR(uint8_t harmonics_wave, int note_on, uint32_t start_time, uint32_t note_off_time, double a, double d, double s, double r){
+	// 初始化ADSR参数
+	uint32_t attack_time = a * 1000 * 100;//10 * 100;  // 快速攻击
+	uint32_t decay_time = d * 1000 * 100;//200 * 100;    // 衰减
+	double sustain_level = s; //0.7; // 持续音量
+	uint32_t release_time = r * 1000 * 100;//;500 * 100;  // 释放
+
+	// 计算当前音量
+	uint32_t current_time = us - start_time;
+	if (start_time == 0xFFFFFFFF) return 0;
+	double envelope = 0.0;
+	uint8_t final_wave = harmonics_wave * envelope;
+
+	if (current_time < attack_time) {
+		final_wave = harmonics_wave * current_time / attack_time;
+	} else if (current_time < attack_time + decay_time) {
+	    envelope = 1.0 - ((current_time - attack_time) / decay_time) * (1.0 - sustain_level);
+	    final_wave = harmonics_wave * envelope;
+	} else if (note_on) {
+	    envelope = sustain_level;
+	    final_wave = harmonics_wave * envelope;
+	} else {
+		uint32_t release_elapsed = us - note_off_time;
+	    envelope = sustain_level * (1.0 - release_elapsed / release_time);
+	    if (envelope < 0) envelope = 0;
+	    final_wave = harmonics_wave * envelope;
+	}
+
+	return final_wave;
 }
 
-
-void Sound(uint16_t frq)
-{
-	uint32_t time;
-    if(frq != 1000)
-    {
-        time = 500000/((uint32_t)frq);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, 1);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
-
-        DelayUS(time);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_3, 0);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_4, 0);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 0);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_10, 0);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_11, 0);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_12, 0);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_13, 0);
-        HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
-
-        DelayUS(time);
-    }else
-    	DelayUS(1000);
-}
+uint8_t mask[8] ={0x01, 0x02, 0x04, 0x08, 0x10, 0x20, 0x40, 0x80};
 
 uint8_t Waving(){
-//	uint16_t pin;
 	uint16_t result = 0;
 	  for(int i = 0; i < 12; i++){
-		  if((pressed_key >> i) & 1 == 1){
-			  if(((uint32_t)((SysTick->VAL)/waves[i]))%2==0){
-				  result += 0x20;
+		  uint8_t note = 0;
+		  uint8_t base = 0x40;
+		  float amplitudes[] = {1.0, 0.4, 0.2, 0.1, 0.05, 0.01, 0.005, 0.001};
+		  for (int j = 1; j < 8; j += 1){
+			  if((us / (waves[i] / j)) % 2==0){
+				  note += base * amplitudes[j-1];
 			  }
-			  if(((uint32_t)((SysTick->VAL)/((uint32_t)(waves[i]/2))))%2==0){
-				  result += 0x08;
+		  }
+
+		  int note_on = ((pressed_key >> i) & 1) == 1;
+		  if(note_on){
+			  if (s_time[i] == 0){
+				  s_time[i] = us;
 			  }
-			  if(((uint32_t)((SysTick->VAL)/((uint32_t)(waves[i]/3))))%2==0){
-			  	  result += 0x08;
-			  }
-			  if(((uint32_t)((SysTick->VAL)/((uint32_t)(waves[i]/4))))%2==0){
-			  	  result += 0x08;
-			  			  }
-			  if(((uint32_t)((SysTick->VAL)/((uint32_t)(waves[i]/5))))%2==0){
-			  	  result += 0x04;
-			  }
+		  }
+		  else if (s_time[i] != 0 && e_time[i] == 0xFFFFFFFF){
+			  e_time[i] = us;
+		  }
+
+		  if (s_time[i] != 0){
+			  note = ADSR(note, note_on, s_time[i], e_time[i], 0.01, 0.1, 0.5, 0.3);
+			  result += note;
+		  }
+		  if (e_time[i] != 0xFFFFFFFF && (e_time[i] + 0.3 * 1000 * 100 < us || s_time[i] > us)){
+		  			  s_time[i] = 0;
+		  			  e_time[i] = 0xFFFFFFFF;
 		  }
 	  }
 	  return result;
@@ -174,151 +156,6 @@ void Sounding(uint8_t waving){
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, (waving >> 1) & 1);
     HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, waving & 1);
 }
-
-// 解析WAV文件�????????????
-void parseWAVHeader(const uint8_t *data, WAVHeader *header) {
-    memcpy(header->chunkID, data, 4);
-    header->chunkSize = *(uint32_t *)(data + 4);
-    memcpy(header->format, data + 8, 4);
-    memcpy(header->subchunk1ID, data + 12, 4);
-    header->subchunk1Size = *(uint32_t *)(data + 16);
-    header->audioFormat = *(uint16_t *)(data + 20);
-    header->numChannels = *(uint16_t *)(data + 22);
-    header->sampleRate = *(uint32_t *)(data + 24);
-    header->byteRate = *(uint32_t *)(data + 28);
-    header->blockAlign = *(uint16_t *)(data + 32);
-    header->bitsPerSample = *(uint16_t *)(data + 34);
-    memcpy(header->subchunk2ID, data + 36, 4);
-    header->subchunk2Size = *(uint32_t *)(data + 40);
-}
-
-uint8_t CRC7(const uint8_t *data, uint8_t len) {
-  uint8_t crc = 0;
-  for (uint8_t i = 0; i < len; i++) {
-    crc = (crc << 1) | (data[i] >> 7);
-    if (crc & 0x80) crc ^= 0x09;
-    for (uint8_t j = 1; j < 8; j++) {
-      crc = (crc << 1) | (data[i] >> (7 - j) & 1);
-      if (crc & 0x80) crc ^= 0x09;
-    }
-  }
-  return crc;
-}
-
-// 发�?�SD卡命�????????
-uint8_t SD_SendCommand(uint8_t cmd, uint32_t arg)
-{
-  uint8_t response;
-  uint8_t command[6];
-
-  command[0] = cmd;
-  command[1] = (uint8_t)(arg >> 24);
-  command[2] = (uint8_t)(arg >> 16);
-  command[3] = (uint8_t)(arg >> 8);
-  command[4] = (uint8_t)(arg);
-//  command[5] = 0x95; // CRC (CMD0不需要CRC)
-
-
-  if (cmd != CMD0) {
-      uint8_t crc_data[5] = {cmd, (uint8_t)(arg >> 24), (uint8_t)(arg >> 16), (uint8_t)(arg >> 8), (uint8_t)arg};
-      command[5] = CRC7(crc_data, 5) | 0x01; // CRC7 + end bit
-    } else {
-      command[5] = 0x95; // CMD0的CRC
-    }
-
-  HAL_SPI_TransmitReceive(&hspi1, command, &response, 1, HAL_MAX_DELAY);
-  return response;
-}
-
-// 等待R1响应�????????0xFF (SD卡忙) 或非0xFF (SD卡准备好)
-uint8_t SD_WaitReady(void)
-{
-    uint8_t res;
-    uint32_t timeout = 500; // 超时时间
-
-    do {
-      res = SD_SendCommand(CMD0, 0);
-      timeout--;
-    } while ((res != 0x01) && timeout > 0 );
-
-    return res;
-}
-
-// 初始化SD�????????
-uint8_t SD_Initialize(void)
-{
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 0);
-	HAL_GPIO_WritePin(GPIOA, GPIO_PIN_1, 1);
-
-    uint16_t timeout = 1000; // 超时时间
-    uint8_t dummy = 0xFF;
-
-    HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
-	HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 0);
-    // 发�?�至�????????74个时�????????
-    for (int i = 0; i < 10; i++)
-        HAL_SPI_Transmit(&hspi1, &dummy, 1, HAL_MAX_DELAY);
-
-    HAL_Delay(1);
-    HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_RESET); // 根据你的CS引脚修改
-    uint8_t response = SD_SendCommand(CMD0, 0);//HAL_SPI_Receive(&hspi1, &response, 1, HAL_MAX_DELAY); // 发�?? CMD0
-    // 发�?�CMD0进入IDLE状�??
-    while (response != 0x01 && timeout > 0) {
-        HAL_SPI_TransmitReceive(&hspi1, &dummy, &response, 1, HAL_MAX_DELAY);
-        timeout--;
-        if (response != 0xFF){
-        	{
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 0);
-				HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
-			}
-        }
-    }
-    if (timeout == 0) {
-    	return 1; // 初始化失�????????
-    }
-
-
-    // 发�?�CMD8, �????????查SD卡版�????????
-    response = SD_SendCommand(CMD8, 0x000001AA);
-    if (response != 0x01) return 1; // 初始化失败，不支持CMD8
-
-    // 发�?�ACMD41，初始化SD�????????
-    do {
-        response = SD_SendCommand(CMD55, 0);
-        response = SD_SendCommand(ACMD41, 0x40000000);  // 支持高容量SD�????????
-        timeout--;
-    } while ((response & R1_IDLE_STATE) && timeout > 0);
-
-    if (timeout == 0) return 1; // 初始化失�????????
-
-    // 发�?�CMD58读取OCR
-	response = SD_SendCommand(CMD58, 0);
-	if (response != 0x00) return 1; // 初始化失�???????
-
-	uint8_t ocr[4];
-	HAL_SPI_Receive(&hspi1, ocr, 4, HAL_MAX_DELAY);
-
-	// �???????查OCR寄存�???????
-	if (!(ocr[0] & 0x80)) return 1; // 电源未准备好
-
-	// �???????查CCS�??????? (Card Capacity Status), 判断SD卡类�???????
-	if (ocr[0] & 0x40) {
-	  // SDHC/SDXC �???????
-	  // ...
-	} else {
-	  // SDSC �???????
-	  // ...
-	}
-
-
-    // CS pin high (SD卡未选中)
-    HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
-
-    return 0; // 初始化成�????????
-}
-
-
-
 
 /* USER CODE END 0 */
 
@@ -356,123 +193,46 @@ int main(void)
   MX_SPI1_Init();
   MX_FATFS_Init();
   /* USER CODE BEGIN 2 */
-  HAL_GPIO_WritePin(GPIOB, Col_3_Out_Pin, 0);
-  HAL_GPIO_WritePin(GPIOB, Col_2_Out_Pin, 0);
-  HAL_GPIO_WritePin(GPIOB, Col_1_Out_Pin, 0);
 
-//  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_14, 1);
-//  HAL_GPIO_WritePin(GPIOB, GPIO_PIN_15, 1);
-
-  HAL_GPIO_WritePin(SD_CS_GPIO_Port, SD_CS_Pin, GPIO_PIN_SET);
-
-
-//  WAVHeader wh;
-//  parseWAVHeader(wav_data, &wh);
-//
-//  SD_Initialize();
-//  FATFS FatFs;  // FATFS文件系统对象
-//  FRESULT res;  // 操作结果
-//
-//  // 挂载文件系统
-//  res = f_mount(&FatFs, "/", 0);
-//  if (res != FR_OK) {
-//    // 挂载失败，处理错�???????
-//    Error_Handler();
-//  }
-//
-//  FIL MyFile;  // 文件对象
-//
-//  // 打开文件
-//  res = f_open(&MyFile, "single-piano-note-a2_100bpm_C_major.wav", FA_READ);
-//  if (res != FR_OK) {
-//    // 打开文件失败，处理错�???????
-//    Error_Handler();
-//  }
   /* USER CODE END 2 */
 
   /* Infinite loop */
   /* USER CODE BEGIN WHILE */
 
-  SysTick->LOAD = 720000000;   // 设置定时器重装�??
-  SysTick->VAL = 0x00;        // 清空当前计数�????????????
-  SysTick->CTRL = 0x00000005; // 设置时钟源为HCLK，启动定时器
+  SysTick->LOAD = 720 - 1;   // 设置定时器重装�??
+  SysTick->VAL = 0x00;        // 清空当前计数�?????????????
+  SysTick->CTRL = 0x07; // 设置时钟源为HCLK，启动定时器
   for(int i = 0; i < 12; i++){
-	  waves[i] = 72*500000/tone[i];
+	  waves[i] = 50000 / tone[i];
   }
-  uint16_t j;
 
   pressed_key = 0x0000;
-
-  j = 3;
-  uint16_t addr = 44;
-  uint16_t freq = 1000;
   while (1)
   {
     /* USER CODE END WHILE */
 
     /* USER CODE BEGIN 3 */
-//    for(i = 0; i < tone[j]/4 ; i ++){
-//		  Sound(tone[j]);
-//	  }
-//
-//	  j ++;
-//
-//	  if(j > 12){
-//		  j = 0;
-//	  }
-	  if(SysTick->CTRL & 0x00010000){
-		  SysTick->LOAD = 720000000;   // 设置定时器重装�??
-		  SysTick->VAL = 0x00;        // 清空当前计数�????????????
-		  SysTick->CTRL = 0x00000005; // 设置时钟源为HCLK，启动定时器
-	  }
 
-	  currentMillis = SysTick->VAL;
-	  if ((previousMillis > currentMillis + 72000) || (previousMillis < currentMillis)){
+	  currentMillis = us;
+	  if (previousMillis + 3 < currentMillis){
 		 HAL_GPIO_EXTI_Callback(Row_4_In_Pin);
 		 HAL_GPIO_EXTI_Callback(Row_3_In_Pin);
 		 HAL_GPIO_EXTI_Callback(Row_2_In_Pin);
 	 	 HAL_GPIO_EXTI_Callback(Row_1_In_Pin);
 	 	 previousMillis = currentMillis;
+	 	 uint32_t ss = 0;
+	 	 for (int i =0; i<12;i+=1){
+	 		 ss += s_time[i];
+	 	 }
+	 	Sounding(Waving());
+	 	if (pressed_key == 0 && ss == 0){
+		  us = 0x00;
+		  currentMillis = 0;
+		  previousMillis = 0;
+		  Sounding(0);
+	 	}
+
 	  }
-
-
-
-//	  for(int i = 0; i < 12; i++){
-//		  if((pressed_key >> i) & 1 == 1){
-//			  freq = tone[i];
-//	  	  	  break;
-//		  }else if(i == 11){
-//			  freq = 1000;
-//		  }
-//
-//	  }
-//
-//
-//
-//	  Sound(freq);
- 	  Sounding(Waving());
-
-//	  i = HAL_GPIO_ReadPin(GPIOB, Row_4_In_Pin);
-
-
-//	if (wh.numChannels == 2){
-//		uint16_t chk = *(uint16_t *)(wav_data + addr);
-//		uint8_t left = *(uint8_t *) &chk;
-//		uint8_t right = *(uint8_t *) (&chk+2);
-//		uint8_t out = left / 2 + right / 2;
-//
-//		uint16_t pins[] = {GPIO_PIN_1, GPIO_PIN_2, GPIO_PIN_10, GPIO_PIN_11, GPIO_PIN_12, GPIO_PIN_13, GPIO_PIN_14, GPIO_PIN_15};
-//		for (int i = 0; i < 8; i++) {
-//			// 使用位运算提取每�?????????????4位的�?????????????
-//			uint8_t bit_value = (out >> (7 - i)) & 1;
-//			HAL_GPIO_WritePin(GPIOB, pins[i], bit_value);
-//		}
-//	}
-//	addr += 2;
-//	if (addr > 460){
-//		addr = 44;
-//	}
-//	DelayUS(1000000 / wh.sampleRate);
   }
   /* USER CODE END 3 */
 }
@@ -481,6 +241,7 @@ int main(void)
   * @brief System Clock Configuration
   * @retval None
   */
+
 void SystemClock_Config(void)
 {
   RCC_OscInitTypeDef RCC_OscInitStruct = {0};
@@ -542,7 +303,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xf7ff; // #
     	}
     }
-    if(GPIO_Pin == Row_3_In_Pin)
+    else if(GPIO_Pin == Row_3_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_3_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0100; // 9
@@ -550,7 +311,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xfeff; // 9
     	}
     }
-    if(GPIO_Pin == Row_2_In_Pin)
+    else if(GPIO_Pin == Row_2_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_2_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0020; // 6
@@ -558,7 +319,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xffdf; // 6
     	}
     }
-    if(GPIO_Pin == Row_1_In_Pin)
+    else if(GPIO_Pin == Row_1_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_1_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0004; // 3
@@ -578,7 +339,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xfbff; // 0
     	}
     }
-    if(GPIO_Pin == Row_3_In_Pin)
+    else if(GPIO_Pin == Row_3_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_3_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0080; // 8
@@ -586,7 +347,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xff7f; // 8
     	}
     }
-    if(GPIO_Pin == Row_2_In_Pin)
+    else if(GPIO_Pin == Row_2_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_2_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0010; // 5
@@ -594,7 +355,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xffef; // 5
     	}
     }
-    if(GPIO_Pin == Row_1_In_Pin)
+    else if(GPIO_Pin == Row_1_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_1_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0002; // 2
@@ -614,7 +375,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xfdff; // *
     	}
     }
-    if(GPIO_Pin == Row_3_In_Pin)
+    else if(GPIO_Pin == Row_3_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_3_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0040; // 7
@@ -622,7 +383,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xffbf; // 7
     	}
     }
-    if(GPIO_Pin == Row_2_In_Pin)
+    else if(GPIO_Pin == Row_2_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_2_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0008; // 4
@@ -630,7 +391,7 @@ void HAL_GPIO_EXTI_Callback(uint16_t GPIO_Pin)
     	  pressed_key = pressed_key & 0xfff7; // 4
     	}
     }
-    if(GPIO_Pin == Row_1_In_Pin)
+    else if(GPIO_Pin == Row_1_In_Pin)
     {
     	if(HAL_GPIO_ReadPin(GPIOB, Row_1_In_Pin) != GPIO_PIN_RESET){
     	  pressed_key = pressed_key | 0x0001; // 1
