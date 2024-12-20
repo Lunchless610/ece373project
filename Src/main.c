@@ -149,9 +149,18 @@ int main(void)
 
 	    Delay_ms(100);
 
-	    if(HAL_UART_Receive(&huart1, &receiveData, 8, 1000) == HAL_OK){
+	    if(HAL_UART_Receive(&huart1, &receiveData, 8, 0xFFFFFFFF) == HAL_OK){
 	    	if(receiveData == 'A'){
-	    		HAL_UART_Transmit(&huart1, &receiveData, 8, 1000)
+	    		HAL_UART_Transmit(&huart1, &vol0, 8, 0xFFFFFFFF);
+	    		HAL_UART_Transmit(&huart1, &vol1, 8, 0xFFFFFFFF);
+	    		HAL_UART_Transmit(&huart1, &vol2, 8, 0xFFFFFFFF);
+	    	}else if(receiveData == 'B'){
+	    		HAL_UART_Transmit(&huart1, &volt0, 8, 1000);
+	    		HAL_UART_Transmit(&huart1, &volt1, 8, 1000);
+	    		HAL_UART_Transmit(&huart1, &volt2, 8, 1000);
+	    	}else{
+	    		uint8_t temp0='S';
+	    		HAL_UART_Transmit(&huart1, &temp0, 8, 1000);
 	    	}
 	    }
   }
